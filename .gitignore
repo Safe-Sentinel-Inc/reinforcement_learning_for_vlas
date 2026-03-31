@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.so
+.venv
+
+# Packages
+*.egg
+*.egg-info/
+.installed.cfg
+*.egg-info
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+.coverage
+.coverage.*
+.cache
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Data files
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.npy
+*.npz
+*data/
+assets/
+logs/
+checkpoints/
+wandb/
+
+# Large files
+*.zip
+*.tar.gz
+*.7z
+
+# Temporary files
+tmp/
+temp/
+debug/
+
+# Collected data
+lerobot_data**/**
