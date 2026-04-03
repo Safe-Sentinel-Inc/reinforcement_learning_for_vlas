@@ -10,7 +10,6 @@ dependencies = [
     "dm-tree>=0.1.8",
     "einops>=0.8.0",
     "equinox>=0.11.8",
-    "flatbuffers>=24.3.25",
     "flax==0.10.2",
     "fsspec[gcs]>=2024.6.0",
     "gym-aloha>=0.1.1",

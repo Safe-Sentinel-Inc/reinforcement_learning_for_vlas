@@ -23,8 +23,6 @@ TCS_DROP_MAX=12
 TCS_MIN_OVERLAP=8
 INITIAL_ACTION_WAIT_S=10.0
 
-RECORD=false            # Enable to write MCAP recordings during inference
-RECORD_DIR=./inference_data
 DAGGER=false            # Enable DAgger-style human intervention collection (needs leader arms)
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -43,6 +41,4 @@ python inference_async.py \
     --tcs-drop-max "${TCS_DROP_MAX}" \
     --tcs-min-overlap "${TCS_MIN_OVERLAP}" \
     --initial-action-wait-s "${INITIAL_ACTION_WAIT_S}" \
-    --record.record-data "${RECORD}" \
-    --record.save-dir "${RECORD_DIR}" \
     --dagger.enable "${DAGGER}"

@@ -10,8 +10,6 @@ HOST=127.0.0.1
 PORT=8000
 PROMPT="Fold clothes"
 CHUNK_SIZE_EXECUTE=25
-RECORD=false            # Enable to write MCAP recordings during inference
-RECORD_DIR=./inference_data
 DAGGER=false            # Enable DAgger-style human intervention collection (needs leader arms)
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -27,6 +25,4 @@ python inference_sync.py \
     --policy-config.port "${PORT}" \
     --prompt "${PROMPT}" \
     --chunk-size-execute "${CHUNK_SIZE_EXECUTE}" \
-    --record.record-data "${RECORD}" \
-    --record.save-dir "${RECORD_DIR}" \
     --dagger.enable "${DAGGER}"

@@ -14,8 +14,6 @@ from inference_helpers import AutoConfig
 from inference_helpers import RemotePolicyConfig
 from inference_helpers import interpolate_action
 from inference_helpers import set_seed
-from inference_recorder import InferenceRecorder
-from inference_recorder import RecordConfig
 from keyboard_listener import KeyboardListener
 import numpy as np
 from pydantic import BaseModel
@@ -63,7 +61,6 @@ class InferConfig(BaseModel):
     initial_action_wait_s: float = 10.0
     debug: bool = False
     prompt: str = ""
-    record: RecordConfig = RecordConfig(record_data=False)
     dagger: DaggerConfig = DaggerConfig(enable=False)
     robot_config: RobotConfig
 
@@ -289,11 +286,6 @@ def model_inference(config: InferConfig, operator: System):
     logger.info("Connecting to policy server at %s:%s", policy_config.host, policy_config.port)
     policy = websocket_client_policy.WebsocketClientPolicy(host=policy_config.host, port=policy_config.port)
 
-    record_config = config.record
-    if record_config.record_data and not record_config.task_name:
-        record_config = record_config.model_copy(update={"task_name": config.prompt})
-    recorder = InferenceRecorder(record_config, auto_config.camera_names)
-
     dagger_ctrl = None
     if config.dagger.enable:
         dagger_ctrl = DaggerController(config.dagger)
@@ -337,7 +329,6 @@ def model_inference(config: InferConfig, operator: System):
                     break
 
             operator.switch_mode(SystemMode.SAMPLING)
-            recorder.start_episode()
             if dagger_ctrl:
                 dagger_ctrl.reset_episode()
 
@@ -384,7 +375,6 @@ def model_inference(config: InferConfig, operator: System):
                             else:
                                 queue_starved_logged = False
 
-                            recorder.record_step(raw_obs, action, intervention=0)
                             if dagger_ctrl:
                                 dagger_ctrl.count_step(intervention=False)
 
@@ -416,7 +406,6 @@ def model_inference(config: InferConfig, operator: System):
                             raw_obs, _policy_observation = update_observation(auto_config.camera_names, operator)
                             leader_qpos = operator.get_leader_qpos()
                             operator.send_action(leader_qpos)
-                            recorder.record_step(raw_obs, leader_qpos, intervention=1)
                             dagger_ctrl.count_step(intervention=True)
                             time.sleep(1.0 / config.step_rate)
                             t += 1
@@ -443,9 +432,6 @@ def model_inference(config: InferConfig, operator: System):
                 finally:
                     async_controller.shutdown()
 
-                dagger_stats = dagger_ctrl.stats.to_dict() if dagger_ctrl else None
-                recorder.save_episode(dagger_stats=dagger_stats)
-
                 if keyboard_listener and keyboard_listener.check_quit():
                     break
 
@@ -456,7 +442,6 @@ def model_inference(config: InferConfig, operator: System):
             keyboard_listener.stop()
         if dagger_ctrl:
             dagger_ctrl.shutdown()
-        recorder.shutdown()
         operator.shutdown()
 
 

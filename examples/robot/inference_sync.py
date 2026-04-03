@@ -12,8 +12,6 @@ from inference_helpers import AutoConfig
 from inference_helpers import RemotePolicyConfig
 from inference_helpers import interpolate_action
 from inference_helpers import set_seed
-from inference_recorder import InferenceRecorder
-from inference_recorder import RecordConfig
 from keyboard_listener import KeyboardListener
 import numpy as np
 from pydantic import BaseModel
@@ -63,7 +61,6 @@ class InferConfig(BaseModel):
     chunk_size_execute: int = 25
     debug: bool = False
     prompt: str = ""
-    record: RecordConfig = RecordConfig(record_data=False)
     dagger: DaggerConfig = DaggerConfig(enable=False)
     robot_config: RobotConfig
 
@@ -114,12 +111,6 @@ def model_inference(config: InferConfig, operator: System):
     logger.info(f"Connecting to policy server at {policy_config.host}:{policy_config.port}")
     policy = websocket_client_policy.WebsocketClientPolicy(host=policy_config.host, port=policy_config.port)
 
-    # Prepare the data recorder for saving episodes
-    record_config = config.record
-    if record_config.record_data and not record_config.task_name:
-        record_config = record_config.model_copy(update={"task_name": config.prompt})
-    recorder = InferenceRecorder(record_config, auto_config.camera_names)
-
     # Optionally set up the DAgger controller for human intervention
     dagger_ctrl = None
     if config.dagger.enable:
@@ -167,8 +158,6 @@ def model_inference(config: InferConfig, operator: System):
                     break
 
             operator.switch_mode(SystemMode.SAMPLING)
-            # Begin recording the new episode
-            recorder.start_episode()
             if dagger_ctrl:
                 dagger_ctrl.reset_episode()
 
@@ -208,8 +197,6 @@ def model_inference(config: InferConfig, operator: System):
 
                         action: np.ndarray = action_chunk[action_index]
 
-                        # Log the observation and action for later replay
-                        recorder.record_step(raw_obs, action, intervention=0)
                         if dagger_ctrl:
                             dagger_ctrl.count_step(intervention=False)
 
@@ -247,8 +234,6 @@ def model_inference(config: InferConfig, operator: System):
                         # Command followers to mirror the leader
                         operator.send_action(leader_qpos)
 
-                        # Mark this step as a human intervention
-                        recorder.record_step(raw_obs, leader_qpos, intervention=1)
                         dagger_ctrl.count_step(intervention=True)
 
                         time.sleep(1.0 / config.step_rate)
@@ -277,10 +262,6 @@ def model_inference(config: InferConfig, operator: System):
                         # Finalize the mode switch
                         dagger_ctrl.complete_resume()
 
-                # Persist the episode data to disk
-                dagger_stats = dagger_ctrl.stats.to_dict() if dagger_ctrl else None
-                recorder.save_episode(dagger_stats=dagger_stats)
-
                 if keyboard_listener and keyboard_listener.check_quit():
                     break
 
@@ -291,7 +272,6 @@ def model_inference(config: InferConfig, operator: System):
             keyboard_listener.stop()
         if dagger_ctrl:
             dagger_ctrl.shutdown()
-        recorder.shutdown()
         operator.shutdown()
 
 

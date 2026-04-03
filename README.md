@@ -18,15 +18,14 @@ The core idea: instead of treating all demonstration data equally, a learned **v
 - [Repository Structure](#repository-structure)
 - [Setup](#setup)
 - [Pipeline Steps](#pipeline-steps)
-  - [1. Data Conversion](#1-data-conversion)
-  - [2. Labeling](#2-labeling)
-  - [3. Normalization](#3-normalization)
-  - [4. Value Function Training (K-Fold)](#4-value-function-training-k-fold)
-  - [5. Value Function Labeling (K-Fold)](#5-value-function-labeling-k-fold)
-  - [6. Policy Training](#6-policy-training)
-  - [7. Serving](#7-serving)
-  - [8. Inference](#8-inference)
-  - [9. DAgger (Interactive Data Collection)](#9-dagger-interactive-data-collection)
+  - [1. Labeling](#1-labeling)
+  - [2. Normalization](#2-normalization)
+  - [3. Value Function Training (K-Fold)](#3-value-function-training-k-fold)
+  - [4. Value Function Labeling (K-Fold)](#4-value-function-labeling-k-fold)
+  - [5. Policy Training](#5-policy-training)
+  - [6. Serving](#6-serving)
+  - [7. Inference](#7-inference)
+  - [8. DAgger (Interactive Data Collection)](#8-dagger-interactive-data-collection)
 - [Iterative Data Loop](#iterative-data-loop)
 - [License](#license)
 
@@ -36,7 +35,7 @@ The core idea: instead of treating all demonstration data equally, a learned **v
 
 This project implements a complete reinforcement learning pipeline for VLA-based advantage-conditioned policy training applied to real-world robot manipulation tasks. The pipeline consists of:
 
-1. **Data collection** -- Teleoperated demonstrations are recorded in MCAP format and converted to LeRobot v2 datasets.
+1. **Data collection** -- Teleoperated demonstrations are collected as LeRobot v2 datasets.
 2. **Progress labeling** -- Each timestep in every episode is assigned a progress label (0 to 1) based on episode success/failure, then discretized into 200 bins.
 3. **K-fold value function training** -- A distributional value function (SigLIP So400m/14 + Gemma 270M + value head) is trained with K-fold cross-validation to predict per-timestep progress values without overfitting.
 4. **Advantage computation** -- The trained value functions infer progress values on their held-out folds, from which temporal-difference advantages are computed. Timesteps above a percentile threshold are labeled as `is_good_action`.
@@ -74,12 +73,10 @@ OpenPI-RL/
 |   |-- shared/                        # Shared utilities (normalization, image tools, etc.)
 |   +-- transforms.py                  # Data transform pipeline (normalization, repacking)
 |
-|-- examples/robot/                    # Robot inference and data conversion scripts
+|-- examples/robot/                    # Robot inference scripts
 |   |-- inference_sync.py              # Synchronous inference (wait per chunk)
 |   |-- inference_async.py             # Asynchronous inference with Temporal Chunk Smoothing (TCS)
 |   |-- dagger_controller.py           # DAgger human intervention controller
-|   |-- inference_recorder.py          # MCAP recorder for inference-time data
-|   |-- convert_mcap_to_lerobot.py     # MCAP to LeRobot v2 format converter
 |   |-- robot_config.py                # Robot hardware configuration
 |   +-- play_operator.py               # Manual teleoperation playback
 |
@@ -91,7 +88,6 @@ OpenPI-RL/
 |   |-- evaluate_pi06_offline.py       # Offline evaluation (metrics, plots)
 |   |-- extract_pi06_features.py       # Feature extraction utilities
 |   |-- cmds/                          # Shell script wrappers for common operations
-|   |   |-- convert_mcap.sh
 |   |   |-- add_labels.sh
 |   |   |-- compute_stats.sh
 |   |   |-- vf_kfold_train.sh
@@ -157,22 +153,7 @@ HF_LEROBOT_HOME=./lerobot_data
 
 All pipeline steps have corresponding shell wrappers in `scripts/cmds/` with clearly documented CONFIG sections at the top of each file. Edit the CONFIG variables before running.
 
-### 1. Data Conversion
-
-Convert raw MCAP teleoperation recordings to the LeRobot v2 dataset format.
-
-```bash
-bash scripts/cmds/convert_mcap.sh
-```
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `DATA_DIR` | `mcap_data/fold_clothes` | Directory containing MCAP files and a `config.py` |
-| `RESUME` | `false` | When `true`, append new episodes without rebuilding the full dataset |
-
-The MCAP directory must contain a `config.py` file describing camera topics, joint topics, and task metadata. The converter reads FlatBuffers-encoded MCAP messages and writes LeRobot v2 parquet files with episode metadata.
-
-### 2. Labeling
+### 1. Labeling
 
 Compute progress labels (`binned_value`), intervention flags, and K-fold splits from binary episode success/failure annotations.
 
@@ -182,7 +163,7 @@ bash scripts/cmds/add_labels.sh
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `CONFIG` | `mcap_data/fold_clothes/config.py` | Path to the MCAP config file (contains episode success labels) |
+| `CONFIG` | `data_config/fold_clothes/config.py` | Path to the labeling config file (contains episode success labels) |
 | `REPO_ID` | `Fold_clothes` | LeRobot dataset repository ID |
 | `NUM_FOLDS` | `3` | Number of K-fold splits for cross-validated VF training |
 
@@ -194,7 +175,7 @@ Progress labeling logic:
 
 When `NUM_FOLDS > 0`, episodes are randomly assigned to folds and a `meta/folds.json` mapping is written to the dataset.
 
-### 3. Normalization
+### 2. Normalization
 
 Compute dataset normalization statistics (mean, std) for state and action dimensions.
 
@@ -208,7 +189,7 @@ bash scripts/cmds/compute_stats.sh
 
 Uses a fast path that reads state/action columns directly from parquet files without decoding images, typically completing in seconds.
 
-### 4. Value Function Training (K-Fold)
+### 3. Value Function Training (K-Fold)
 
 Train K value functions in parallel, each excluding one fold of the data, to avoid overfitting the VF to its own training data.
 
@@ -231,7 +212,7 @@ Each fold trains on all data except the held-out fold. The K training jobs run i
 
 For quick single-VF experiments (no cross-validation), use `scripts/cmds/vf_train.sh` instead.
 
-### 5. Value Function Labeling (K-Fold)
+### 4. Value Function Labeling (K-Fold)
 
 Use the K trained value functions to infer progress values on their held-out folds, compute advantages, and write the `is_good_action` boolean column to the dataset.
 
@@ -268,7 +249,7 @@ advantage(t) = sum_{i=0}^{T-t-1} gamma^i * (reward(t+i) - baseline)
 
 Timesteps with advantage above the percentile threshold (determined by `POSITIVE_FRACTION`) are labeled `is_good_action = True`.
 
-### 6. Policy Training
+### 5. Policy Training
 
 Train the advantage-conditioned pi\_0 policy. Requires `is_good_action` labels in the dataset.
 
@@ -285,7 +266,7 @@ bash scripts/cmds/train_policy.sh
 
 The policy is conditioned on the `is_good_action` label during training. At inference time, the label is set to `True` so the policy generates high-advantage actions. Checkpoints are saved to `checkpoints/<POLICY_CONFIG>/<EXP_NAME>/`. Training progress is logged to Weights & Biases.
 
-### 7. Serving
+### 6. Serving
 
 Start the trained policy as a WebSocket inference server.
 
@@ -301,7 +282,7 @@ bash scripts/cmds/serve_policy.sh
 
 The server loads the model checkpoint and listens for inference requests from the client. Multiple clients can connect simultaneously.
 
-### 8. Inference
+### 7. Inference
 
 Run the policy on the robot. Two modes are available:
 
@@ -319,8 +300,6 @@ bash scripts/cmds/infer_sync.sh
 | `PORT` | `8000` | Policy server port |
 | `PROMPT` | `"Fold clothes"` | Natural language task prompt |
 | `CHUNK_SIZE_EXECUTE` | `25` | Number of action steps to execute per chunk |
-| `RECORD` | `false` | Enable MCAP data recording |
-| `RECORD_DIR` | `./inference_data` | Directory for recorded data |
 | `DAGGER` | `false` | Enable DAgger intervention mode |
 
 #### Asynchronous Inference
@@ -340,13 +319,11 @@ bash scripts/cmds/infer_async.sh
 | `TCS_DROP_MAX` | `12` | Max stale steps to drop for latency compensation |
 | `TCS_MIN_OVERLAP` | `8` | Minimum overlap window for blending old/new chunks |
 | `INITIAL_ACTION_WAIT_S` | `10.0` | Max wait time (seconds) for the first action chunk at episode start |
-| `RECORD` | `false` | Enable MCAP data recording |
-| `RECORD_DIR` | `./inference_data` | Directory for recorded data |
 | `DAGGER` | `false` | Enable DAgger intervention mode |
 
 TCS (Temporal Chunk Smoothing) handles the overlap between consecutive action chunks: when a new chunk arrives, the first N stale steps are dropped (up to `TCS_DROP_MAX`), and the remaining overlap region is linearly blended from old to new.
 
-### 9. DAgger (Interactive Data Collection)
+### 8. DAgger (Interactive Data Collection)
 
 DAgger (Dataset Aggregation) enables human intervention during policy inference for iterative data collection. When enabled, a human operator can:
 
@@ -354,8 +331,6 @@ DAgger (Dataset Aggregation) enables human intervention during policy inference 
 2. The leader arms smoothly align to the follower arm positions via cosine interpolation.
 3. The human demonstrates recovery actions through leader arm teleoperation.
 4. Press **`o`** to resume autonomous policy inference.
-
-The intervention data (including the human corrections) is recorded in MCAP format when `RECORD=true`. This data can then be converted and added to the training dataset for the next iteration.
 
 To enable DAgger, set `DAGGER=true` in either `infer_sync.sh` or `infer_async.sh`. This requires leader arms to be connected.
 
@@ -367,25 +342,23 @@ The full iterative improvement loop follows this cycle:
 
 **Step-by-step iteration procedure:**
 
-1. **Initial data collection** -- Record teleoperation demonstrations with the robot. Mark each episode as success or failure in the MCAP config.
+1. **Initial data collection** -- Record teleoperation demonstrations with the robot as a LeRobot v2 dataset. Mark each episode as success or failure in the labeling config.
 
-2. **Convert** -- Run `convert_mcap.sh` to transform MCAP recordings into LeRobot v2 format. Use `RESUME=true` to append new episodes to an existing dataset.
+2. **Label** -- Run `add_labels.sh` to compute progress labels and assign K-fold splits. This must be re-run from scratch whenever episodes are added (not incremental).
 
-3. **Label** -- Run `add_labels.sh` to compute progress labels and assign K-fold splits. This must be re-run from scratch whenever episodes are added (not incremental).
+3. **Normalize** -- Run `compute_stats.sh` to recompute normalization statistics for the updated dataset.
 
-4. **Normalize** -- Run `compute_stats.sh` to recompute normalization statistics for the updated dataset.
+4. **Train value functions** -- Run `vf_kfold_train.sh` to train K value functions with cross-validation.
 
-5. **Train value functions** -- Run `vf_kfold_train.sh` to train K value functions with cross-validation.
+5. **Label with VF** -- Run `vf_kfold_label.sh` to infer progress values, compute advantages, and write `is_good_action` labels.
 
-6. **Label with VF** -- Run `vf_kfold_label.sh` to infer progress values, compute advantages, and write `is_good_action` labels.
+6. **Train policy** -- Run `train_policy.sh` to fine-tune the advantage-conditioned policy. Increment the `EXP_NAME` for each iteration (e.g., `policy_iter0`, `policy_iter1`, ...).
 
-7. **Train policy** -- Run `train_policy.sh` to fine-tune the advantage-conditioned policy. Increment the `EXP_NAME` for each iteration (e.g., `policy_iter0`, `policy_iter1`, ...).
+7. **Deploy** -- Run `serve_policy.sh` to start the inference server, then `infer_async.sh` (recommended) or `infer_sync.sh` to run the policy on the robot.
 
-8. **Deploy** -- Run `serve_policy.sh` to start the inference server, then `infer_async.sh` (recommended) or `infer_sync.sh` to run the policy on the robot.
+8. **DAgger** -- During deployment, enable DAgger (`DAGGER=true`). When the policy fails, the human operator intervenes to demonstrate corrections. The correction data can be added to the training dataset for the next iteration.
 
-9. **DAgger** -- During deployment, enable DAgger (`DAGGER=true`) and data recording (`RECORD=true`). When the policy fails, the human operator intervenes to demonstrate corrections. The recorded data becomes input for the next iteration.
-
-10. **Repeat** -- Convert the new DAgger data (step 2 with `RESUME=true`), re-label, retrain, and redeploy. Each iteration improves the policy by incorporating both the original demonstrations and the targeted corrections from previous deployments.
+9. **Repeat** -- Add the new DAgger data to the dataset, re-label, retrain, and redeploy. Each iteration improves the policy by incorporating both the original demonstrations and the targeted corrections from previous deployments.
 
 ---
 

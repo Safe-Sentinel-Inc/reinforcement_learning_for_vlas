@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-CONFIG=mcap_data/fold_clothes/config.py
+CONFIG=data_config/fold_clothes/config.py
 REPO_ID=Fold_clothes   # Dataset name; leave blank to infer from config.py TASK_NAME
 NUM_FOLDS=3
 # ───────────────────────────────────────────────────────────────────────────────

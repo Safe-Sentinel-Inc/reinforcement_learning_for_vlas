@@ -73,12 +73,6 @@ mkdir -p lerobot_data
 # Example: ln -s /workspace/my_dataset lerobot_data/My_Task
 ```
 
-If you have raw MCAP data, convert it first:
-
-```bash
-bash scripts/cmds/convert_mcap.sh
-```
-
 ## 7. Run the Training Pipeline
 
 Follow the pipeline steps from the main README:

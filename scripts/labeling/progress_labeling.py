@@ -1,5 +1,7 @@
 """Assign binned progress values and intervention flags to dataset episodes."""
 
+import dataclasses
+import importlib.util
 import json
 import logging
 import pathlib
@@ -15,6 +17,45 @@ from .dataset_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(frozen=True)
+class LabelConfig:
+    """Metadata describing labeling parameters for a dataset.
+
+    Loaded from a user-provided ``config.py`` file that declares episode-level
+    success/failure annotations and other labeling settings.
+    """
+
+    task_name: str
+    # Labeling metadata
+    success_episodes: str | list[int] = "all"
+    failed_episodes: tuple[int, ...] = ()
+    all_human: bool = False
+    intervention_episodes: dict = dataclasses.field(default_factory=dict)
+    stage_boundaries: tuple[int, ...] = ()
+
+
+def load_label_config(config_path: str | pathlib.Path) -> LabelConfig:
+    """Import a Python config file and return its labeling parameters as a LabelConfig."""
+    config_path = pathlib.Path(config_path)
+    if not config_path.is_file():
+        config_path = config_path / "config.py"
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Config not found: {config_path}")
+
+    spec = importlib.util.spec_from_file_location("_label_cfg", config_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_label_cfg"] = mod
+    spec.loader.exec_module(mod)
+    return LabelConfig(
+        task_name=mod.TASK_NAME,
+        success_episodes=getattr(mod, "SUCCESS_EPISODES", "all"),
+        failed_episodes=tuple(getattr(mod, "FAILED_EPISODES", ())),
+        all_human=getattr(mod, "ALL_HUMAN", False),
+        intervention_episodes=dict(getattr(mod, "INTERVENTION_EPISODES", {})),
+        stage_boundaries=tuple(getattr(mod, "STAGE_BOUNDARIES", ())),
+    )
 
 
 def compute_binned_value_progress(
@@ -84,10 +125,7 @@ def _run_add_labels(args):
     intervention_ranges: dict[int, list[list[int]]] = {}
     stage_boundaries: list[int] = []
 
-    sys.path.insert(0, str(pathlib.Path(args.config).resolve().parent))
-    from examples.robot.convert_mcap_to_lerobot import load_task_config
-
-    cfg = load_task_config(args.config)
+    cfg = load_label_config(args.config)
     repo_id = args.repo_id if args.repo_id else cfg.task_name
     success_spec = cfg.success_episodes
     failed_list = list(cfg.failed_episodes)
